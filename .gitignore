@@ -1,3 +1,7 @@
 result/
 *.db
 .direnv/
+.env
+rule.md
+test/
+shell.nix

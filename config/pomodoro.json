@@ -1,0 +1,39 @@
+{
+    "timer": {
+        "defaultMode": "pomodoro",
+        "pomodoro": {
+            "workDuration": 1500,
+            "shortBreak": 300,
+            "longBreak": 900,
+            "sprintsBeforeLongBreak": 4
+        },
+        "countdown": {
+            "defaultDuration": 1500
+        },
+        "pulseInterval": 600,
+        "autoStartBreaks": true,
+        "autoStartWork": false
+    },
+    "reminders": {
+        "enabled": true,
+        "pollInterval": 30,
+        "defaultSnoozeDuration": 600
+    },
+    "integrations": {
+        "googleCalendar": {
+            "enabled": false,
+            "syncInterval": 300,
+            "calendars": []
+        },
+        "obsidian": {
+            "enabled": false,
+            "projectDir": "Pomodoro-QS"
+        }
+    },
+    "ui": {
+        "showEstimateOnCards": true,
+        "celebrationGif": "root:/assets/celebration.gif",
+        "compactMode": false,
+        "showFocusOverlay": true
+    }
+}
