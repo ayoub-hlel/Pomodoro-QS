@@ -34,7 +34,7 @@ Item {
             : root.btnColor
         Behavior on color { ColorAnimation { duration: 200 } }
 
-        // Icon + label centered
+        // Icon + (optional label) centered
         ColumnLayout {
             anchors.centerIn: parent
             spacing: 2
@@ -48,7 +48,7 @@ Item {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: root.label
-                font.pixelSize: 9
+                font.pixelSize: root.label.length > 0 ? 9 : 0
                 font.letterSpacing: 0.5
                 font.family: "Rubik"
                 color: root.btnTextColor

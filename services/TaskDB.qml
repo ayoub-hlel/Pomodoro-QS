@@ -78,7 +78,23 @@ Item {
     function getTasks(l, a) { let r = []; run(tx => { let rs = tx.executeSql(`SELECT * FROM tasks WHERE list_id = ? ${a ? "" : "AND is_completed = 0"} ORDER BY position`, [l]); for (let i = 0; i < rs.rows.length; i++) r.push(rs.rows.item(i)); }, true); return r; }
     function getSubtasks(t) { let r = []; run(tx => { let rs = tx.executeSql("SELECT * FROM subtasks WHERE task_id = ?", [t]); for (let i = 0; i < rs.rows.length; i++) r.push(rs.rows.item(i)); }, true); return r; }
     function createList(n, c, i) { let r; run(tx => { tx.executeSql("INSERT INTO lists (name, color, icon) VALUES (?, ?, ?)", [n, c, i]); r = tx.executeSql("SELECT * FROM lists WHERE id = last_insert_rowid()").rows.item(0); }); return r; }
-    function createTask(l, n, e) { let r; run(tx => { let p = tx.executeSql("SELECT COUNT(*) as c FROM tasks WHERE list_id = ?", [l]).rows.item(0).c; tx.executeSql("INSERT INTO tasks (list_id, name, estimate, position, created_at) VALUES (?, ?, ?, ?, ?)", [l, n, e, p, Math.floor(Date.now()/1000)]); r = tx.executeSql("SELECT * FROM tasks WHERE id = last_insert_rowid()").rows.item(0); }); return r; }
+    /** Whitelist of updatable fields — prevents SQL injection */
+    readonly property var _taskFields: ["name", "estimate", "actual_time", "scheduled_at", "snoozed_until", "position", "is_completed", "is_archived"]
+    function updateTaskField(id, field, value) {
+        if (_taskFields.indexOf(field) < 0) {
+            console.error("TaskDB: blocked update of unknown field '" + field + "'");
+            return;
+        }
+        run(tx => { tx.executeSql("UPDATE tasks SET " + field + " = ? WHERE id = ?", [value, id]); });
+    }
+    /** Accumulate tracked time without overwriting */
+    function addActualTime(taskId, seconds) {
+        if (!taskId || !seconds || seconds <= 0) return;
+        run(tx => {
+            tx.executeSql("UPDATE tasks SET actual_time = actual_time + ? WHERE id = ?", [Math.floor(seconds), taskId]);
+        });
+    }
+    function createTask(l, n, e) { let r; run(tx => { let p = tx.executeSql("SELECT COUNT(*) as c FROM tasks WHERE list_id = ?", [l]).rows.item(0).c; tx.executeSql("INSERT INTO tasks (list_id, name, estimate, position, created_at) VALUES (?, ?, ?, ?, ?)", [l, n, e || 0, p, Math.floor(Date.now()/1000)]); r = tx.executeSql("SELECT * FROM tasks WHERE id = last_insert_rowid()").rows.item(0); }); return r; }
     function setSubtask(t, n, c) { run(tx => tx.executeSql("INSERT INTO subtasks (task_id, name, is_completed) VALUES (?, ?, ?)", [t, n, c])); }
     function getLists() { let r = []; run(tx => { let rs = tx.executeSql("SELECT * FROM lists"); for (let i = 0; i < rs.rows.length; i++) r.push(rs.rows.item(i)); }, true); return r; }
 }
