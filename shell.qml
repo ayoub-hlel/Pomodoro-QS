@@ -11,6 +11,18 @@ Window {
     visible: true; title: "Pomodoro-QS — The Board"
     color: Colours.palette.m3background
 
+    property int _dragTaskId: 0
+    property string _dragTitle: ""
+    
+    DragProxy {
+        id: dragProxy
+        visible: _dragTaskId > 0
+        title: _dragTitle
+        // Position is updated by the global tracker
+    }
+
+    // Positioning is now handled by the dragMove signals
+
     // ── Global Popups ──────────────────────────────────────────
     SchedulingPopup { id: schedPopup }
     
@@ -140,6 +152,10 @@ Window {
                 onTaskToggled: (id) => { TaskDB.toggleTaskCompletion(id); TestData.syncTask(id); }
                 onTaskMoved: (id, dir) => win.moveTask(id, dir)
                 onTaskMenu: (id, p) => { expandedMenu.activeTaskId = id; expandedMenu.open(); }
+                onTaskDropped: (id) => { TaskDB.updateTaskField(id, "scheduled_at", 0); TestData.syncTask(id); }
+                onDragStart: (id, title, pos) => { _dragTaskId = id; _dragTitle = title; dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
+                onDragMove: (pos) => { dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
+                onDragEnd: { _dragTaskId = 0; }
             }
 
             BoardColumn {
@@ -147,6 +163,10 @@ Window {
                 onTaskToggled: (id) => { TaskDB.toggleTaskCompletion(id); TestData.syncTask(id); }
                 onTaskMoved: (id, dir) => win.moveTask(id, dir)
                 onTaskMenu: (id, p) => { expandedMenu.activeTaskId = id; expandedMenu.open(); }
+                onTaskDropped: (id) => { TaskDB.updateTaskField(id, "scheduled_at", TestData._todayStart() + 86400); TestData.syncTask(id); }
+                onDragStart: (id, title, pos) => { _dragTaskId = id; _dragTitle = title; dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
+                onDragMove: (pos) => { dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
+                onDragEnd: { _dragTaskId = 0; }
             }
 
             BoardColumn {
@@ -154,6 +174,10 @@ Window {
                 onTaskToggled: (id) => { TaskDB.toggleTaskCompletion(id); TestData.syncTask(id); }
                 onTaskMoved: (id, dir) => win.moveTask(id, dir)
                 onTaskMenu: (id, p) => { expandedMenu.activeTaskId = id; expandedMenu.open(); }
+                onTaskDropped: (id) => { TaskDB.updateTaskField(id, "scheduled_at", TestData._todayStart()); TestData.syncTask(id); }
+                onDragStart: (id, title, pos) => { _dragTaskId = id; _dragTitle = title; dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
+                onDragMove: (pos) => { dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
+                onDragEnd: { _dragTaskId = 0; }
                 
                 // Done Zone is at the bottom of Today
                 ColumnLayout {
@@ -164,7 +188,10 @@ Window {
                         model: TestData.doneModel
                         delegate: TaskCard {
                             Layout.fillWidth: true; task: model; isActive: false
-                            onToggleComplete: (id) => { TaskDB.toggleTaskCompletion(id); TestData.syncTask(id); }
+                            onTaskToggled: (id) => { TaskDB.toggleTaskCompletion(id); TestData.syncTask(id); }
+                            onDragStart: (id, title, pos) => { _dragTaskId = id; _dragTitle = title; dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
+                            onDragMove: (pos) => { dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
+                            onDragEnd: { _dragTaskId = 0; }
                         }
                     }
                 }

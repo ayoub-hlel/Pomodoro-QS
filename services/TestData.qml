@@ -110,13 +110,12 @@ QtObject {
     function syncTask(taskId) {
         if (!taskId) return;
         
-        // 1. Remove from all current models
+        // 1. Remove from all current models (thoroughly)
         let models = [todayModel, weekModel, backlogModel, doneModel];
         for (let m = 0; m < models.length; m++) {
-            for (let i = 0; i < models[m].count; i++) {
+            for (let i = models[m].count - 1; i >= 0; i--) {
                 if (models[m].get(i).id === taskId) {
                     models[m].remove(i, 1);
-                    break;
                 }
             }
         }

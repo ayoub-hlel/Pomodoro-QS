@@ -26,18 +26,25 @@ Item {
     readonly property int _subCount: subtasks.count || 0
     readonly property int _subDone: {
         let c = 0;
-        for (let i = 0; i < _subCount; i++) {
-            if (subtasks.get(i).is_completed) c++;
+        if (subtasks && subtasks.count) {
+            for (let i = 0; i < subtasks.count; i++) {
+                if (subtasks.get(i).is_completed) c++;
+            }
         }
         return c;
     }
     readonly property real _subFrac: _subCount > 0 ? _subDone / _subCount : 0
 
     // Signals for the Shell to handle
-    signal toggleComplete(int taskId)
+    signal taskToggled(int taskId)
     signal moveColumn(int taskId, string direction)
     signal menuRequested(int taskId, point pos)
     signal editTitle(int taskId, string newName)
+    signal dragStart(int taskId, string title, point pos)
+    signal dragMove(point pos)
+    signal dragEnd()
+    
+    property bool isDragging: false
 
     implicitWidth: 320
     implicitHeight: mainCol.implicitHeight + 24
@@ -63,6 +70,7 @@ Item {
         id: mainCol
         anchors { fill: parent; margins: 12 }
         spacing: 8
+        opacity: root.isDragging ? 0.3 : 1.0
 
         RowLayout {
             Layout.fillWidth: true
@@ -70,11 +78,38 @@ Item {
 
             // ── Drag Handle ────────────────────────────────────────
             Text {
+                id: handle
                 text: "\ue945" // drag_indicator
                 font.family: "Material Symbols Rounded"; font.pixelSize: 20
                 color: Colours.palette.m3onSurfaceVariant; opacity: 0.3
                 Layout.alignment: Qt.AlignVCenter
+                
+                MouseArea {
+                    id: dragArea
+                    anchors.fill: parent
+                    cursorShape: Qt.SizeAllCursor
+                    onPressed: (mouse) => {
+                        let global = root.mapToItem(root.Window.contentItem, mouse.x, mouse.y);
+                        root.isDragging = true;
+                        root.dragStart(_taskId, _t.name, global);
+                    }
+                    onPositionChanged: (mouse) => {
+                        if (pressed) {
+                            let global = root.mapToItem(root.Window.contentItem, mouse.x, mouse.y);
+                            root.dragMove(global);
+                        }
+                    }
+                    onReleased: {
+                        root.isDragging = false;
+                        root.dragEnd();
+                    }
+                }
             }
+            
+            Drag.active: dragArea.pressed
+            Drag.keys: ["task"]
+            Drag.mimeData: { "taskId": _taskId.toString() }
+            Drag.dragType: Drag.Internal
 
             // ── Title ──────────────────────────────────────────────
             TextInput {
@@ -95,7 +130,7 @@ Item {
 
             // ── Scheduled Time Badge ───────────────────────────────
             Rectangle {
-                visible: _t.scheduled_time && _t.scheduled_time !== "00:00"
+                visible: _t.scheduled_time && _t.scheduled_time !== "00:00" && _t.scheduled_time !== ""
                 Layout.alignment: Qt.AlignVCenter
                 color: Qt.alpha(Colours.palette.m3tertiary, 0.12)
                 radius: 4; width: 44; height: 18
