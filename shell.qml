@@ -24,6 +24,11 @@ Window {
                 color: Colours.palette.m3onBackground
             }
 
+            TimerDisplay {
+                Layout.fillWidth: true
+                // compact: true  // uncomment for compact horizontal layout
+            }
+
             Repeater {
                 model: TestData.tasksModel
                 delegate: TaskCard {
@@ -32,13 +37,18 @@ Window {
                     subtasks: model.subtasksList // Atomic update via ListModel
                     isActive: index === 0
 
-                    onToggleComplete: {
+                    onToggleComplete: function(taskId) {
                         // Use Smart Toggle Logic
                         TaskDB.toggleTaskCompletion(taskId);
                         TestData.syncTask(taskId);
                     }
 
-                    onSubtaskToggled: {
+                    onStartFocus: function(taskId) {
+                        // Start Pomodoro focus session for this task
+                        TimerService.start(taskId);
+                    }
+
+                    onSubtaskToggled: function(taskId, subtaskId, isCompleted) {
                         // Use Integrity Observer Logic
                         TaskDB.updateSubtask(subtaskId, { is_completed: isCompleted ? 1 : 0 });
                         // Refresh the parent task to show new progress/completion

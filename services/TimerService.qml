@@ -30,7 +30,7 @@ Item {
 
     // ── Signals ──────────────────────────────────────────────────
     signal finished()                   // emitted when break → done (cycle complete)
-    signal stateChanged(string newState)
+    signal timerStateChanged(string newState)  // emitted on every state transition
 
     // ── Internal ─────────────────────────────────────────────────
     property double _runStart: 0        // Date.now() when last uninterrupted run began
@@ -56,11 +56,11 @@ Item {
             if (state === "running") {
                 _prevState = "break";
                 state = "break";
-                stateChanged("break");
+                timerStateChanged("break");
                 _beginCountdown(breakDuration);
             } else if (state === "break") {
                 state = "done";
-                stateChanged("done");
+                timerStateChanged("done");
                 root.finished();
             }
         }
@@ -74,7 +74,7 @@ Item {
         if (breakDur !== undefined) breakDuration = Math.max(1, Math.floor(breakDur));
         _prevState = "running";
         state = "running";
-        stateChanged("running");
+        timerStateChanged("running");
         _beginCountdown(workDuration);
     }
 
@@ -88,13 +88,13 @@ Item {
         _ticker.stop();
         _prevState = state;
         state = "paused";
-        stateChanged("paused");
+        timerStateChanged("paused");
     }
 
     function resume() {
         if (state !== "paused") return;
         state = _prevState;
-        stateChanged(state);
+        timerStateChanged(state);
         _runStart = Date.now();
         _ticker.start();
     }
@@ -105,7 +105,7 @@ Item {
         _resetInternals();
         activeTaskId = 0;
         state = "idle";
-        stateChanged("idle");
+        timerStateChanged("idle");
     }
 
     // ── Internal ─────────────────────────────────────────────────
