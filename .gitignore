@@ -5,3 +5,4 @@ result/
 rule.md
 test/
 shell.nix
+agents/
