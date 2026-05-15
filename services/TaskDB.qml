@@ -2,99 +2,199 @@ pragma Singleton
 import QtQuick
 import QtQuick.LocalStorage
 
+/**
+ * TaskDB — Expanded Schema for Board-based Productivity.
+ *
+ * Tables:
+ *   lists    — categories/projects
+ *   tasks    — main units of work (inc. recurring parents)
+ *   subtasks — nested items for a task
+ *   sessions — record of time spent
+ */
 Item {
     id: root
-    property var _db: null
 
-    function run(cb, r = false) {
-        if (r) _db.readTransaction(tx => { cb(tx); });
-        else _db.transaction(tx => { tx.executeSql("PRAGMA foreign_keys = ON;"); cb(tx); });
-    }
+    property var db: null
 
-    Component.onCompleted: {
+    function openDB() {
+        if (db) return db;
         try {
-            _db = LocalStorage.openDatabaseSync("PomodoroQS", "1.0", "TaskDB", 5000000);
-            run(tx => {
-                tx.executeSql("CREATE TABLE IF NOT EXISTS lists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, color TEXT, icon TEXT DEFAULT 'checklist');");
-                tx.executeSql("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, list_id INTEGER NOT NULL, name TEXT NOT NULL, estimate INTEGER DEFAULT 0, actual_time INTEGER DEFAULT 0, scheduled_at INTEGER DEFAULT 0, snoozed_until INTEGER DEFAULT 0, position INTEGER NOT NULL, is_completed INTEGER DEFAULT 0, is_archived INTEGER DEFAULT 0, created_at INTEGER NOT NULL);");
-                // Hardened Subtasks: Added completed_at for chronological undo
-                tx.executeSql("CREATE TABLE IF NOT EXISTS subtasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, name TEXT NOT NULL, is_completed INTEGER DEFAULT 0, completed_at INTEGER DEFAULT 0);");
-                tx.executeSql("CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER DEFAULT 0, duration INTEGER DEFAULT 0, mode TEXT NOT NULL);");
+            db = LocalStorage.openDatabaseSync("PomodoroQS_V2", "1.0", "Task Storage", 100000);
+            db.transaction(tx => {
+                // Lists: id, name, color, icon, type (checklist/board)
+                tx.executeSql("CREATE TABLE IF NOT EXISTS lists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, color TEXT, icon TEXT, type TEXT DEFAULT 'board')");
                 
-                // Migration: Attempt to add completed_at if it doesn't exist
-                try { tx.executeSql("ALTER TABLE subtasks ADD COLUMN completed_at INTEGER DEFAULT 0;"); } catch(e) {}
+                // Tasks: expanded for scheduling and recurrence
+                tx.executeSql(`CREATE TABLE IF NOT EXISTS tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    list_id INTEGER,
+                    parent_id INTEGER DEFAULT 0,
+                    name TEXT,
+                    notes TEXT DEFAULT '',
+                    estimate INTEGER DEFAULT 0,
+                    actual_time INTEGER DEFAULT 0,
+                    position INTEGER DEFAULT 0,
+                    scheduled_at INTEGER DEFAULT 0,
+                    scheduled_time TEXT DEFAULT '',
+                    recurrence_rule TEXT DEFAULT '',
+                    is_completed INTEGER DEFAULT 0,
+                    is_archived INTEGER DEFAULT 0,
+                    created_at INTEGER,
+                    FOREIGN KEY(list_id) REFERENCES lists(id)
+                )`);
+
+                // Subtasks: added position for reordering
+                tx.executeSql("CREATE TABLE IF NOT EXISTS subtasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, name TEXT, is_completed INTEGER DEFAULT 0, position INTEGER DEFAULT 0, FOREIGN KEY(task_id) REFERENCES tasks(id))");
+
+                // Sessions: for historical reports
+                tx.executeSql("CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, started_at INTEGER, ended_at INTEGER, mode TEXT, duration INTEGER, FOREIGN KEY(task_id) REFERENCES tasks(id))");
+                
+                // Migration: Ensure 'notes' exists in older DBs
+                try { tx.executeSql("ALTER TABLE tasks ADD COLUMN notes TEXT DEFAULT ''"); } catch(e) {}
+                try { tx.executeSql("ALTER TABLE tasks ADD COLUMN recurrence_rule TEXT DEFAULT ''"); } catch(e) {}
+                try { tx.executeSql("ALTER TABLE subtasks ADD COLUMN position INTEGER DEFAULT 0"); } catch(e) {}
             });
-        } catch (e) { console.error("TaskDB:", e); }
-    }
-
-    // ── Smart Toggle Logic (Chronological) ─────────────────────────
-    function toggleTaskCompletion(taskId) {
-        run(tx => {
-            let t = tx.executeSql("SELECT is_completed FROM tasks WHERE id = ?", [taskId]).rows.item(0);
-            let isCurrentlyDone = t.is_completed === 1;
-
-            if (isCurrentlyDone) {
-                // CHRONOLOGICAL UNDO: Find the subtask that was finished LAST in time
-                let subtasks = tx.executeSql("SELECT id FROM subtasks WHERE task_id = ? AND is_completed = 1 ORDER BY completed_at DESC, id DESC", [taskId]);
-                if (subtasks.rows.length > 0) {
-                    tx.executeSql("UPDATE subtasks SET is_completed = 0, completed_at = 0 WHERE id = ?", [subtasks.rows.item(0).id]);
-                    tx.executeSql("UPDATE tasks SET is_completed = 0 WHERE id = ?", [taskId]);
-                } else {
-                    tx.executeSql("UPDATE tasks SET is_completed = 0 WHERE id = ?", [taskId]);
-                }
-            } else {
-                // Force complete everything (and stamp them all with current time)
-                let now = Math.floor(Date.now() / 1000);
-                tx.executeSql("UPDATE subtasks SET is_completed = 1, completed_at = ? WHERE task_id = ?", [now, taskId]);
-                tx.executeSql("UPDATE tasks SET is_completed = 1 WHERE id = ?", [taskId]);
-            }
-        });
-    }
-
-    // ── Subtask Mutation with Temporal Stamping ────────────────────
-    function updateSubtask(subtaskId, fields) {
-        let k = Object.keys(fields); if (!k.length) return;
-        run(tx => {
-            // If marking as completed, add temporal stamp
-            if (fields.is_completed === 1) {
-                fields.completed_at = Math.floor(Date.now() / 1000);
-                k.push("completed_at");
-            } else if (fields.is_completed === 0) {
-                fields.completed_at = 0;
-                k.push("completed_at");
-            }
-
-            tx.executeSql(`UPDATE subtasks SET ${k.map(x => `${x} = ?`).join(", ")} WHERE id = ?`, [...Object.values(fields), subtaskId]);
-            
-            let taskId = tx.executeSql("SELECT task_id FROM subtasks WHERE id = ?", [subtaskId]).rows.item(0).task_id;
-            let total = tx.executeSql("SELECT COUNT(*) as c FROM subtasks WHERE task_id = ?", [taskId]).rows.item(0).c;
-            let done = tx.executeSql("SELECT COUNT(*) as c FROM subtasks WHERE task_id = ? AND is_completed = 1", [taskId]).rows.item(0).c;
-            
-            tx.executeSql("UPDATE tasks SET is_completed = ? WHERE id = ?", [(total > 0 && total === done) ? 1 : 0, taskId]);
-        });
-    }
-
-    // Boilerplate
-    function getTasks(l, a) { let r = []; run(tx => { let rs = tx.executeSql(`SELECT * FROM tasks WHERE list_id = ? ${a ? "" : "AND is_completed = 0"} ORDER BY position`, [l]); for (let i = 0; i < rs.rows.length; i++) r.push(rs.rows.item(i)); }, true); return r; }
-    function getSubtasks(t) { let r = []; run(tx => { let rs = tx.executeSql("SELECT * FROM subtasks WHERE task_id = ?", [t]); for (let i = 0; i < rs.rows.length; i++) r.push(rs.rows.item(i)); }, true); return r; }
-    function createList(n, c, i) { let r; run(tx => { tx.executeSql("INSERT INTO lists (name, color, icon) VALUES (?, ?, ?)", [n, c, i]); r = tx.executeSql("SELECT * FROM lists WHERE id = last_insert_rowid()").rows.item(0); }); return r; }
-    /** Whitelist of updatable fields — prevents SQL injection */
-    readonly property var _taskFields: ["name", "estimate", "actual_time", "scheduled_at", "snoozed_until", "position", "is_completed", "is_archived"]
-    function updateTaskField(id, field, value) {
-        if (_taskFields.indexOf(field) < 0) {
-            console.error("TaskDB: blocked update of unknown field '" + field + "'");
-            return;
+        } catch (e) {
+            console.error("TaskDB: Failed to open database — " + e);
         }
-        run(tx => { tx.executeSql("UPDATE tasks SET " + field + " = ? WHERE id = ?", [value, id]); });
+        return db;
     }
-    /** Accumulate tracked time without overwriting */
-    function addActualTime(taskId, seconds) {
-        if (!taskId || !seconds || seconds <= 0) return;
+
+    function run(callback, readOnly = false) {
+        let database = openDB();
+        if (!database) return;
+        if (readOnly) database.readTransaction(callback);
+        else database.transaction(callback);
+    }
+
+    // ── Helper: Natural Language Time Parser ─────────────────────
+    /** 
+     * Parses "Task Name 1h 30m" -> { name: "Task Name", seconds: 5400 }
+     */
+    function parseNaturalTime(input) {
+        if (!input) return { name: "", seconds: 0 };
+        
+        let regex = /(\d+)\s*(hr|hrs|h|hour|hours|min|mins|m|minute|minutes)/gi;
+        let totalSeconds = 0;
+        let match;
+        let strippedName = input;
+
+        while ((match = regex.exec(input)) !== null) {
+            let val = parseInt(match[1]);
+            let unit = match[2].toLowerCase();
+            
+            if (unit.startsWith("h")) totalSeconds += val * 3600;
+            else if (unit.startsWith("m")) totalSeconds += val * 60;
+            
+            strippedName = strippedName.replace(match[0], "");
+        }
+
+        return { 
+            name: strippedName.trim().replace(/\s+/g, ' '), 
+            seconds: totalSeconds 
+        };
+    }
+
+    // ── Core API ──────────────────────────────────────────────────
+    
+    function getLists() {
+        let r = [];
         run(tx => {
-            tx.executeSql("UPDATE tasks SET actual_time = actual_time + ? WHERE id = ?", [Math.floor(seconds), taskId]);
+            let rs = tx.executeSql("SELECT * FROM lists ORDER BY id ASC");
+            for (let i = 0; i < rs.rows.length; i++) r.push(rs.rows.item(i));
+        }, true);
+        return r;
+    }
+
+    function getTasks(listId, includeCompleted = false) {
+        let r = [];
+        let query = "SELECT * FROM tasks WHERE 1=1";
+        let params = [];
+        
+        if (listId > 0) {
+            query += " AND list_id = ?";
+            params.push(listId);
+        }
+        
+        if (!includeCompleted) {
+            query += " AND is_completed = 0";
+        }
+        
+        query += " ORDER BY position ASC";
+        
+        run(tx => {
+            let rs = tx.executeSql(query, params);
+            for (let i = 0; i < rs.rows.length; i++) r.push(rs.rows.item(i));
+        }, true);
+        return r;
+    }
+
+    function getSubtasks(taskId) {
+        let r = [];
+        run(tx => {
+            let rs = tx.executeSql("SELECT * FROM subtasks WHERE task_id = ? ORDER BY position ASC", [taskId]);
+            for (let i = 0; i < rs.rows.length; i++) r.push(rs.rows.item(i));
+        }, true);
+        return r;
+    }
+
+    function createTask(listId, rawName, estimateOverride = -1, pos = 0) {
+        let parsed = parseNaturalTime(rawName);
+        let finalName = parsed.name || "Untitled Task";
+        let finalEst = (estimateOverride >= 0) ? estimateOverride : parsed.seconds;
+        let r;
+        
+        run(tx => {
+            tx.executeSql(`INSERT INTO tasks 
+                (list_id, name, estimate, position, created_at) 
+                VALUES (?, ?, ?, ?, ?)`, 
+                [listId, finalName, finalEst, pos, Math.floor(Date.now()/1000)]);
+            r = tx.executeSql("SELECT * FROM tasks WHERE id = last_insert_rowid()").rows.item(0);
+        });
+        return r;
+    }
+
+    function updateTaskField(id, field, value) {
+        const allowed = ["name", "notes", "estimate", "actual_time", "scheduled_at", "scheduled_time", "recurrence_rule", "position", "is_completed", "is_archived", "list_id"];
+        if (allowed.indexOf(field) < 0) return;
+        run(tx => {
+            tx.executeSql(`UPDATE tasks SET ${field} = ? WHERE id = ?`, [value, id]);
         });
     }
-    function createTask(l, n, e) { let r; run(tx => { let p = tx.executeSql("SELECT COUNT(*) as c FROM tasks WHERE list_id = ?", [l]).rows.item(0).c; tx.executeSql("INSERT INTO tasks (list_id, name, estimate, position, created_at) VALUES (?, ?, ?, ?, ?)", [l, n, e || 0, p, Math.floor(Date.now()/1000)]); r = tx.executeSql("SELECT * FROM tasks WHERE id = last_insert_rowid()").rows.item(0); }); return r; }
-    function setSubtask(t, n, c) { run(tx => tx.executeSql("INSERT INTO subtasks (task_id, name, is_completed) VALUES (?, ?, ?)", [t, n, c])); }
-    function getLists() { let r = []; run(tx => { let rs = tx.executeSql("SELECT * FROM lists"); for (let i = 0; i < rs.rows.length; i++) r.push(rs.rows.item(i)); }, true); return r; }
+
+    function toggleTaskCompletion(id) {
+        run(tx => {
+            let task = tx.executeSql("SELECT is_completed FROM tasks WHERE id = ?", [id]).rows.item(0);
+            let newState = task.is_completed ? 0 : 1;
+            tx.executeSql("UPDATE tasks SET is_completed = ? WHERE id = ?", [newState, id]);
+            // If completed, move to end of position or something? 
+            // The classification engine handles the 'Done' zone.
+        });
+    }
+
+    function updateSubtask(id, field, value) {
+        run(tx => {
+            tx.executeSql(`UPDATE subtasks SET ${field} = ? WHERE id = ?`, [value, id]);
+        });
+    }
+
+    function createSubtask(taskId, name) {
+        run(tx => {
+            let p = tx.executeSql("SELECT COUNT(*) as c FROM subtasks WHERE task_id = ?", [taskId]).rows.item(0).c;
+            tx.executeSql("INSERT INTO subtasks (task_id, name, position) VALUES (?, ?, ?)", [taskId, name, p]);
+        });
+    }
+
+    function deleteSubtask(id) {
+        run(tx => tx.executeSql("DELETE FROM subtasks WHERE id = ?", [id]));
+    }
+
+    function createList(name, color, icon) {
+        let r;
+        run(tx => {
+            tx.executeSql("INSERT INTO lists (name, color, icon) VALUES (?, ?, ?)", [name, color, icon]);
+            r = tx.executeSql("SELECT * FROM lists WHERE id = last_insert_rowid()").rows.item(0);
+        });
+        return r;
+    }
 }
