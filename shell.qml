@@ -6,95 +6,117 @@ import "./components"
 
 Window {
     id: win
-    width: 440
-    height: 700
+    width: 480
+    height: 720
     visible: true
-    title: "Pomodoro-QS — TaskCard Showcase"
+    title: "Pomodoro-QS — Component Showcase"
     color: Colours.palette.m3background
 
-    ColumnLayout {
-        anchors {
-            fill: parent
-            margins: 20
-        }
-        spacing: 16
+    Flickable {
+        anchors.fill: parent
+        contentHeight: column.implicitHeight + 40
+        clip: true
 
-        // Title
-        Text {
-            text: "TaskCard Showcase"
-            font.pixelSize: 22
-            font.family: "Rubik"
-            font.bold: true
-            color: Colours.palette.m3onBackground
-            Layout.bottomMargin: 8
-        }
+        ColumnLayout {
+            id: column
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: parent.top
+                margins: 20
+            }
+            spacing: 16
 
-        // 1. Active task
-        TaskCard {
-            Layout.fillWidth: true
-            isActive: true
-            task: ({
-                id: 1,
-                name: "Designing the new Shell Interface",
-                estimate: 3600,
-                actual_time: 1200
-            })
-            onStartFocus: console.log("focus toggle:", taskId)
-            onToggleComplete: console.log("toggle complete:", taskId)
-        }
+            // ── Title ──
+            Text {
+                text: "TaskCard + SubtaskRow"
+                font.pixelSize: 22
+                font.family: "Rubik"
+                font.bold: true
+                color: Colours.palette.m3onBackground
+                Layout.bottomMargin: 2
+            }
 
-        // 2. Completed task
-        TaskCard {
-            Layout.fillWidth: true
-            task: ({
-                id: 2,
-                name: "Write Project Documentation",
-                is_completed: 1
-            })
-            onStartFocus: console.log("focus toggle:", taskId)
-            onToggleComplete: console.log("toggle complete:", taskId)
-        }
+            // ── DB info line ──
+            Text {
+                text: TestData.ready
+                    ? TestData.list.name + " \u00b7 " + TestData.tasks.length + " tasks"
+                    : "Loading database\u2026"
+                font.pixelSize: 13
+                font.family: "Rubik"
+                color: Colours.palette.m3onSurfaceVariant
+                visible: true
+                Layout.bottomMargin: 8
+            }
 
-        // 3. Overdue task
-        TaskCard {
-            Layout.fillWidth: true
-            task: ({
-                id: 3,
-                name: "Review PR #42",
-                scheduled_at: Math.floor(Date.now() / 1000) - 86400
-            })
-            onStartFocus: console.log("focus toggle:", taskId)
-            onToggleComplete: console.log("toggle complete:", taskId)
-        }
+            // ── Loading indicator ──
+            Text {
+                id: loadingMsg
+                text: "Seeding test database\u2026"
+                font.pixelSize: 14
+                font.family: "Rubik"
+                color: Colours.palette.m3onSurfaceVariant
+                visible: !TestData.ready
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 40
+            }
 
-        // 4. Task with subtasks + notes + URL
-        TaskCard {
-            Layout.fillWidth: true
-            task: ({
-                id: 4,
-                name: "Feature Implementation",
-                notes: "This has notes and a progress bar",
-                url: "https://github.com/example/pr"
-            })
-            subtasks: [
-                { is_completed: 1 },
-                { is_completed: 1 },
-                { is_completed: 0 }
-            ]
-            onStartFocus: console.log("focus toggle:", taskId)
-            onToggleComplete: console.log("toggle complete:", taskId)
-        }
+            // ── Task Cards from DB ──
+            Repeater {
+                model: TestData.tasks
 
-        // 5. Compact mode
-        TaskCard {
-            Layout.fillWidth: true
-            compact: true
-            task: ({
-                id: 5,
-                name: "Compact mode example — minimised card"
-            })
-        }
+                delegate: TaskCard {
+                    id: card
+                    Layout.fillWidth: true
+                    Layout.topMargin: 4
 
-        Item { Layout.fillHeight: true }
+                    required property var modelData
+                    required property int index
+
+                    task: modelData
+
+                    subtasks: TestData.subtasksForTask(modelData.id)
+
+                    // Last card gets active highlight for demo
+                    isActive: index === 0
+
+                    // Compact mode for short tasks
+                    compact: modelData.name.length < 20 && index > 2
+
+                    onToggleComplete: {
+                        console.log("toggle complete:", taskId)
+                        var newVal = task.is_completed ? 0 : 1
+                        TaskDB.updateTask(taskId, { is_completed: newVal })
+                        TestData.loadFromDB()
+                    }
+
+                    onStartFocus: console.log("focus toggle:", taskId)
+
+                    onSubtaskToggled: {
+                        console.log("subtask", subtaskId, "of task", taskId, "→", isCompleted)
+                        TaskDB.updateSubtask(subtaskId, { is_completed: isCompleted ? 1 : 0 })
+                        // Reload subtask data for this task
+                        var updated = TaskDB.getSubtasks(taskId)
+                        // Trigger re-evaluation by re-loading full data
+                        TestData.loadFromDB()
+                    }
+                }
+            }
+
+            // ── Footer ──
+            Text {
+                text: TestData.ready
+                    ? "Data from TaskDB \u00b7 Interactive \u00b7 Try toggling"
+                    : ""
+                font.pixelSize: 12
+                font.family: "Rubik"
+                color: Colours.palette.m3onSurfaceVariant
+                visible: TestData.ready
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 8
+            }
+
+            Item { Layout.fillHeight: true }
+        }
     }
 }

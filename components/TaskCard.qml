@@ -50,6 +50,9 @@ Item {
     /** Emitted when the user wants to edit the task */
     signal editRequested(int taskId)
 
+    /** Emitted when a subtask checkbox is toggled */
+    signal subtaskToggled(int taskId, int subtaskId, bool isCompleted)
+
     // ── Derived State ──────────────────────────────────────────────
     readonly property bool _hasNotes: task.notes !== undefined && task.notes !== null && String(task.notes).length > 0
     readonly property bool _hasUrl: task.url !== undefined && task.url !== null && String(task.url).length > 0
@@ -66,9 +69,15 @@ Item {
     readonly property bool _isOverdue: _isScheduled && task.scheduled_at < Math.floor(Date.now() / 1000) && !task.is_completed
 
     // ── Dimensions ─────────────────────────────────────────────────
+    /** Total height of the subtask list (0 if none) */
+    readonly property real _subtaskListHeight: {
+        if (!subtasks || subtasks.length === 0) return 0
+        return subtasks.length * 30 - 2  // 28px rows + 2px spacing, minus trailing space
+    }
+
     implicitHeight: compact
         ? 56
-        : contentColumn.implicitHeight + 24 + (subtasks.length > 0 ? 8 : 0)
+        : contentColumn.implicitHeight + 24 + root._subtaskListHeight + (subtasks.length > 0 ? 12 : 0)
 
     // ── States (declarative — no imperative visible/hacks) ─────────
     states: [
@@ -319,6 +328,40 @@ Item {
                     anchors.margins: -4
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.deleteRequested(task.id !== undefined ? task.id : 0)
+                }
+            }
+        }
+    }
+
+    // ── Subtask List ────────────────────────────────────────────────
+    Item {
+        id: subtaskSection
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: contentRow.bottom
+            topMargin: 4
+        }
+        visible: root.subtasks.length > 0
+        height: root._subtaskListHeight
+
+        Column {
+            anchors.fill: parent
+            spacing: 2
+
+            Repeater {
+                model: root.subtasks
+
+                delegate: SubtaskRow {
+                    width: subtaskSection.width
+                    subtask: modelData
+                    showRemove: false
+
+                    onToggled: root.subtaskToggled(
+                        root.task.id !== undefined ? root.task.id : 0,
+                        subtaskId,
+                        isCompleted
+                    )
                 }
             }
         }
