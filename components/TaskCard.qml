@@ -93,6 +93,20 @@ Item {
                 }
             }
 
+            // ── Scheduled Time Badge ───────────────────────────────
+            Rectangle {
+                visible: _t.scheduled_time && _t.scheduled_time !== "00:00"
+                Layout.alignment: Qt.AlignVCenter
+                color: Qt.alpha(Colours.palette.m3tertiary, 0.12)
+                radius: 4; width: 44; height: 18
+                Text {
+                    anchors.centerIn: parent
+                    text: _t.scheduled_time || ""
+                    font.pixelSize: 10; font.family: "CaskaydiaCove NF"; font.bold: true
+                    color: Colours.palette.m3tertiary
+                }
+            }
+
             // ── Hover Controls ─────────────────────────────────────
             RowLayout {
                 spacing: 4; visible: hover.hovered && !_done
@@ -106,9 +120,14 @@ Item {
                 // Checkbox
                 Rectangle {
                     width: 22; height: 22; radius: 11
-                    border.width: 2; border.color: Colours.palette.m3primary
-                    color: "transparent"
-                    Text { anchors.centerIn: parent; text: "\u2713"; color: Colours.palette.m3primary; visible: false }
+                    border.width: _done ? 0 : 2
+                    border.color: Colours.palette.m3primary
+                    color: _done ? Colours.palette.m3primary : "transparent"
+                    Text { 
+                        anchors.centerIn: parent; text: "\u2713"; 
+                        color: "white"; font.pixelSize: 13
+                        visible: _done 
+                    }
                     MouseArea { anchors.fill: parent; onClicked: root.toggleComplete(_taskId) }
                 }
 

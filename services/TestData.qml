@@ -58,6 +58,19 @@ QtObject {
         return "backlog";
     }
 
+    // ── Lookup a task by ID across all models ───────────────────
+    function getTask(taskId) {
+        if (!taskId) return null;
+        let models = [todayModel, weekModel, backlogModel, doneModel];
+        for (let m = 0; m < models.length; m++) {
+            for (let i = 0; i < models[m].count; i++) {
+                if (models[m].get(i).id === taskId)
+                    return models[m].get(i);
+            }
+        }
+        return null;
+    }
+
     // ── Model Sync ───────────────────────────────────────────────
     function loadFromDB() {
         backlogModel.clear();

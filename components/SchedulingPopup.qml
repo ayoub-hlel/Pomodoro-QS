@@ -59,8 +59,15 @@ Popup {
             Text { text: "Time & Recurrence"; font.pixelSize: 18; font.bold: true; color: Colours.palette.m3onSurface }
 
             RowLayout {
-                Text { text: "Add Time"; color: Colours.palette.m3onSurfaceVariant }
-                Button { text: "+ ADD"; onClicked: console.log("Time picker") }
+                spacing: 8
+                Text { text: "Time (HH:MM)"; color: Colours.palette.m3onSurfaceVariant }
+                TextField {
+                    id: timeInput
+                    placeholderText: "09:00"
+                    inputMask: "99:99"
+                    font.family: "CaskaydiaCove NF"
+                    Layout.preferredWidth: 80
+                }
             }
 
             ColumnLayout {
@@ -83,6 +90,7 @@ Popup {
                     highlighted: true
                     onClicked: {
                         TaskDB.updateTaskField(root.taskId, "scheduled_at", root.selectedDate);
+                        TaskDB.updateTaskField(root.taskId, "scheduled_time", timeInput.text);
                         TestData.syncTask(root.taskId);
                         root.close();
                     }

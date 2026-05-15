@@ -14,6 +14,7 @@ import qs.services
  */
 Item {
     id: root
+    signal startTriggered()
 
     // ── Derived State ──────────────────────────────────────────────
     readonly property string _label: {
@@ -173,11 +174,14 @@ Item {
             spacing: 8
 
             TimerControlButton {
-                icon: "\ue037"; label: "Start"
+                icon: "\ue037"; label: "Start Focus"
                 btnColor: Colours.palette.m3primary; btnTextColor: Colours.palette.m3onPrimary
-                implicitWidth: 52; implicitHeight: 52; btnRadius: 26
-                visible: TimerService.state === "done"
-                onClicked: TimerService.start()
+                implicitWidth: 120; implicitHeight: 52; btnRadius: 26
+                visible: TimerService.state === "idle" || TimerService.state === "done"
+                onClicked: {
+                    if (TimerService.state === "idle") root.startTriggered();
+                    else TimerService.start();
+                }
             }
 
             TimerControlButton {
