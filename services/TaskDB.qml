@@ -108,7 +108,7 @@ Item {
 
     function getTasks(listId, includeCompleted = false) {
         let r = [];
-        let query = "SELECT * FROM tasks WHERE 1=1";
+        let query = "SELECT * FROM tasks WHERE is_archived = 0";
         let params = [];
         
         if (listId > 0) {

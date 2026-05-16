@@ -1,6 +1,6 @@
 pragma Singleton
 import QtQuick
-import qs.services
+import QtQuick
 
 /**
  * TestData — The Central Classification Engine.
@@ -51,9 +51,18 @@ QtObject {
         let s = task.scheduled_at || 0;
         let todayEnd = _todayEnd();
         let weekEnd = _weekEnd();
+        let rule = task.recurrence_rule || "";
+
+        if (rule === "Every day") return "today";
+        if (rule === "Every weekday") {
+            let d = new Date().getDay();
+            if (d >= 1 && d <= 5) return "today";
+            return "backlog";
+        }
+        if (rule === "Weekly") return "week";
 
         if (s === 0) return "backlog";
-        if (s <= todayEnd) return "today"; // Includes Overdue
+        if (s <= todayEnd) return "today"; 
         if (s <= weekEnd) return "week";
         return "backlog";
     }
@@ -138,6 +147,7 @@ QtObject {
         else if (col === "week") weekModel.append(fresh);
         else if (col === "done") doneModel.append(fresh);
         else backlogModel.append(fresh);
+        if (ObsidianService.autoSync) ObsidianService.syncTask(fresh);
     }
 
     // ── Seeding ──────────────────────────────────────────────────

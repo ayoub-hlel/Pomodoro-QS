@@ -14,20 +14,11 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent; anchors.margins: 12
+        spacing: 8
         
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-            
-            // Toolbar (Placeholders for Rich Text Actions)
-            IconBtn { icon: "\ue238"; size: 24; onClicked: console.log("Bold") }
-            IconBtn { icon: "\ue23f"; size: 24; onClicked: console.log("Italic") }
-            IconBtn { icon: "\ue241"; size: 24; onClicked: console.log("List") }
-            
-            Item { Layout.fillWidth: true }
-            
-            // Voice Mic
-            IconBtn { icon: "\ue029"; size: 28; color: Colours.palette.m3primary; onClicked: console.log("Transcribe") }
+        Text { 
+            text: "NOTES"; font.pixelSize: 10; font.weight: Font.Black; 
+            color: Colours.palette.m3onSurfaceVariant; opacity: 0.6 
         }
 
         ScrollView {

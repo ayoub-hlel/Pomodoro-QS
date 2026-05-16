@@ -28,28 +28,46 @@ Window {
     
     Popup {
         id: expandedMenu
-        width: 350; height: 400
-        background: Rectangle { color: Colours.tPalette.m3surfaceContainer; radius: 16 }
+        width: 400; height: 500
+        padding: 0; modal: true; focus: true
+        anchors.centerIn: parent
+        
+        background: Rectangle { 
+            color: Colours.tPalette.m3surfaceContainer; radius: 20
+            border.width: 1; border.color: Qt.alpha(Colours.palette.m3outline, 0.1)
+        }
         
         property int activeTaskId: 0
         
         ColumnLayout {
-            anchors.fill: parent; anchors.margins: 16
-            spacing: 12
+            anchors.fill: parent; anchors.margins: 20
+            spacing: 16
             
+            Text {
+                property var activeTask: expandedMenu.activeTaskId > 0 ? TestData.getTask(expandedMenu.activeTaskId) : null
+                text: activeTask ? activeTask.name : "Task Details"
+                font.pixelSize: 18; font.weight: Font.Bold; color: Colours.palette.m3onSurface
+                Layout.fillWidth: true; elide: Text.ElideRight
+            }
+
             RowLayout {
-                spacing: 8
-                Button { text: "Schedule"; onClicked: { expandedMenu.close(); schedPopup.taskId = expandedMenu.activeTaskId; schedPopup.open(); } }
-                Button { text: "Notes"; onClicked: { notesStack.currentIndex = 0; } }
-                Button { text: "Subtasks"; onClicked: { notesStack.currentIndex = 1; } }
-                Item { Layout.fillWidth: true }
+                spacing: 4
                 Button { 
-                    text: "Delete"; 
-                    palette.button: Colours.palette.m3error; 
-                    palette.buttonText: "white";
+                    text: "Notes"; flat: notesStack.currentIndex !== 0; 
+                    onClicked: notesStack.currentIndex = 0 
+                }
+                Button { 
+                    text: "Subtasks"; flat: notesStack.currentIndex !== 1; 
+                    onClicked: notesStack.currentIndex = 1 
+                }
+                Item { Layout.fillWidth: true }
+                IconBtn { 
+                    icon: "\ue872"; size: 32; color: Colours.palette.m3error; 
                     onClicked: { 
-                        TaskDB.updateTaskField(expandedMenu.activeTaskId, "is_archived", 1); 
-                        TestData.syncTask(expandedMenu.activeTaskId);
+                        let tid = expandedMenu.activeTaskId;
+                        TaskDB.updateTaskField(tid, "is_archived", 1); 
+                        TestData.syncTask(tid);
+                        expandedMenu.activeTaskId = 0;
                         expandedMenu.close(); 
                     } 
                 }
@@ -58,11 +76,77 @@ Window {
             StackLayout {
                 id: notesStack
                 Layout.fillWidth: true; Layout.fillHeight: true
-                NotesPanel { taskId: expandedMenu.activeTaskId }
+                property var activeTask: expandedMenu.activeTaskId > 0 ? TestData.getTask(expandedMenu.activeTaskId) : null
+                
+                NotesPanel { 
+                    taskId: expandedMenu.activeTaskId
+                    initialNotes: notesStack.activeTask ? notesStack.activeTask.notes : "" 
+                }
                 SubtaskPanel { 
                     taskId: expandedMenu.activeTaskId
-                    subtasks: expandedMenu.activeTaskId > 0 ? TestData.getTask(expandedMenu.activeTaskId).subtasksList : []
+                    subtasks: notesStack.activeTask ? notesStack.activeTask.subtasksList : []
                 }
+            }
+
+            Button {
+                text: "Schedule Task"; Layout.fillWidth: true; highlighted: true
+                onClicked: { expandedMenu.close(); schedPopup.taskId = expandedMenu.activeTaskId; schedPopup.open(); }
+            }
+        }
+    }
+
+    // ── Celebration Popup ──────────────────────────────────────
+    Popup {
+        id: successPopup
+        width: 380; height: 480
+        modal: true; focus: true
+        anchors.centerIn: parent
+        visible: TestData.ready && TestData.todayModel.count === 0 && TestData.doneModel.count > 0
+        
+        background: Rectangle { 
+            color: Colours.tPalette.m3surfaceContainer; radius: 24
+            border.width: 1; border.color: Qt.alpha(Colours.palette.m3outline, 0.1)
+        }
+
+        ColumnLayout {
+            anchors.fill: parent; anchors.margins: 24; spacing: 16
+            
+            Image {
+                source: "file:///home/biyop/.gemini/antigravity/brain/b9662a04-92f6-4114-8b75-086fd50b3775/celebration_meme_success_1778926403172.png"
+                Layout.preferredWidth: 200; Layout.preferredHeight: 200
+                Layout.alignment: Qt.AlignCenter
+                fillMode: Image.PreserveAspectFit
+            }
+
+            Text {
+                text: "WELL DONE!"; font.pixelSize: 24; font.weight: Font.Black
+                color: Colours.palette.m3primary; Layout.alignment: Qt.AlignCenter
+            }
+
+            Text {
+                text: "You've crushed all your tasks for today. Your Obsidian vault is synced and up to date."; 
+                font.pixelSize: 14; color: Colours.palette.m3onSurfaceVariant
+                Layout.fillWidth: true; wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter
+                opacity: 0.8
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignCenter; spacing: 20
+                ColumnLayout {
+                    Text { text: TestData.doneModel.count; font.pixelSize: 20; font.bold: true; color: Colours.palette.m3onSurface; Layout.alignment: Qt.AlignCenter }
+                    Text { text: "TASKS"; font.pixelSize: 10; color: Colours.palette.m3onSurfaceVariant; Layout.alignment: Qt.AlignCenter }
+                }
+                Rectangle { width: 1; height: 30; color: Colours.palette.m3outlineVariant }
+                ColumnLayout {
+                    Text { text: "100%"; font.pixelSize: 20; font.bold: true; color: Colours.palette.m3success; Layout.alignment: Qt.AlignCenter }
+                    Text { text: "DONE"; font.pixelSize: 10; color: Colours.palette.m3onSurfaceVariant; Layout.alignment: Qt.AlignCenter }
+                }
+            }
+
+            Button {
+                text: "GO RELAX"; highlighted: true; Layout.fillWidth: true
+                Layout.preferredHeight: 52
+                onClicked: successPopup.close()
             }
         }
     }
@@ -171,6 +255,7 @@ Window {
 
             BoardColumn {
                 title: "Today"; accentColor: Colours.palette.m3primary; model: TestData.todayModel
+                doneModel: TestData.doneModel; showBlitz: true
                 onTaskToggled: (id) => { TaskDB.toggleTaskCompletion(id); TestData.syncTask(id); }
                 onTaskMoved: (id, dir) => win.moveTask(id, dir)
                 onTaskMenu: (id, p) => { expandedMenu.activeTaskId = id; expandedMenu.open(); }
@@ -178,23 +263,6 @@ Window {
                 onDragStart: (id, title, pos) => { _dragTaskId = id; _dragTitle = title; dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
                 onDragMove: (pos) => { dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
                 onDragEnd: { _dragTaskId = 0; }
-                
-                // Done Zone is at the bottom of Today
-                ColumnLayout {
-                    Layout.fillWidth: true; visible: TestData.doneModel.count > 0; spacing: 8
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Colours.palette.m3outlineVariant }
-                    Text { text: "DONE"; font.pixelSize: 10; font.bold: true; color: Colours.palette.m3success; Layout.leftMargin: 8 }
-                    Repeater {
-                        model: TestData.doneModel
-                        delegate: TaskCard {
-                            Layout.fillWidth: true; task: model; isActive: false
-                            onTaskToggled: (id) => { TaskDB.toggleTaskCompletion(id); TestData.syncTask(id); }
-                            onDragStart: (id, title, pos) => { _dragTaskId = id; _dragTitle = title; dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
-                            onDragMove: (pos) => { dragProxy.x = pos.x - dragProxy.width/2; dragProxy.y = pos.y - dragProxy.height/2; }
-                            onDragEnd: { _dragTaskId = 0; }
-                        }
-                    }
-                }
             }
         }
     }

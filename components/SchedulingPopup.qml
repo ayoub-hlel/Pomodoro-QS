@@ -42,9 +42,19 @@ Popup {
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true; Layout.fillHeight: true; color: "transparent"
-                Text { anchors.centerIn: parent; text: "[Full Calendar Placeholder]"; color: Colours.palette.m3outline }
+            Flow {
+                Layout.fillWidth: true; spacing: 8
+                Repeater {
+                    model: 7
+                    delegate: Button {
+                        property int dayStart: TestData._todayStart() + index * 86400
+                        text: {
+                            let d = new Date(dayStart * 1000);
+                            return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+                        }
+                        onClicked: { root.selectedDate = dayStart; stack.currentIndex = 1; }
+                    }
+                }
             }
 
             Button { 
@@ -60,22 +70,32 @@ Popup {
 
             RowLayout {
                 spacing: 8
-                Text { text: "Time (HH:MM)"; color: Colours.palette.m3onSurfaceVariant }
+                Text { text: "Time"; color: Colours.palette.m3onSurfaceVariant }
                 TextField {
                     id: timeInput
                     placeholderText: "09:00"
                     inputMask: "99:99"
-                    font.family: "CaskaydiaCove NF"
-                    Layout.preferredWidth: 80
+                    font.family: "Monospace"
+                    Layout.preferredWidth: 70
+                    text: "09:00"
                 }
+            }
+
+            Flow {
+                Layout.fillWidth: true; spacing: 8
+                Button { text: "09:00"; onClicked: timeInput.text = "09:00" }
+                Button { text: "13:00"; onClicked: timeInput.text = "13:00" }
+                Button { text: "17:00"; onClicked: timeInput.text = "17:00" }
+                Button { text: "21:00"; onClicked: timeInput.text = "21:00" }
             }
 
             ColumnLayout {
                 spacing: 4
                 Text { text: "Repeat"; font.bold: true; color: Colours.palette.m3onSurfaceVariant }
                 ComboBox {
+                    id: repeatCombo
                     Layout.fillWidth: true
-                    model: ["No Repeat", "Every day", "Every weekday", "Weekly", "Monthly", "Custom"]
+                    model: ["No Repeat", "Every day", "Every weekday", "Weekly", "Monthly"]
                 }
             }
 
@@ -91,6 +111,7 @@ Popup {
                     onClicked: {
                         TaskDB.updateTaskField(root.taskId, "scheduled_at", root.selectedDate);
                         TaskDB.updateTaskField(root.taskId, "scheduled_time", timeInput.text);
+                        TaskDB.updateTaskField(root.taskId, "recurrence_rule", repeatCombo.currentText === "No Repeat" ? "" : repeatCombo.currentText);
                         TestData.syncTask(root.taskId);
                         root.close();
                     }
